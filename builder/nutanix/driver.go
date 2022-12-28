@@ -28,7 +28,7 @@ type Driver interface {
 	//GetImage(string) (*nutanixImage, error)
 	GetHost(string) (*nutanixHost, error)
 	PowerOff(string) error
-	UploadImage(string, string, string, VmConfig) (*nutanixImage, error)
+	UploadImage(string, string, string, VmConfig, string) (*nutanixImage, error)
 	DeleteImage(string) error
 	GetImage(string) (*nutanixImage, error)
 	SaveVMDisk(string) (*nutanixImage, error)
@@ -244,7 +244,7 @@ func (d *NutanixDriver) CreateRequest(vm VmConfig) (*v3.VMIntentInput, error) {
 		if disk.ImageType == "DISK_IMAGE" {
 			image := &v3.ImageIntentResponse{}
 			if disk.SourceImageURI != "" {
-				image, err := d.UploadImage(disk.SourceImageURI, "URI", disk.ImageType, vm)
+				image, err := d.UploadImage(disk.SourceImageURI, "URI", disk.ImageType, vm, disk.SourceImageChecksum)
 				if err != nil {
 					return nil, fmt.Errorf("error while findImageByUUID, Error %s", err.Error())
 				}
@@ -301,7 +301,7 @@ func (d *NutanixDriver) CreateRequest(vm VmConfig) (*v3.VMIntentInput, error) {
 		if disk.ImageType == "ISO_IMAGE" {
 			image := &v3.ImageIntentResponse{}
 			if disk.SourceImageURI != "" {
-				image, err := d.UploadImage(disk.SourceImageURI, "URI", disk.ImageType, vm)
+				image, err := d.UploadImage(disk.SourceImageURI, "URI", disk.ImageType, vm, disk.SourceImageChecksum)
 				if err != nil {
 					return nil, fmt.Errorf("error while findImageByUUID, Error %s", err.Error())
 				}
@@ -496,7 +496,7 @@ func (d *NutanixDriver) Delete(vmUUID string) error {
 }
 
 // UploadImage (string, VmConfig) (*nutanixImage, error)
-func (d *NutanixDriver) UploadImage(imagePath string, sourceType string, imageType string, vm VmConfig) (*nutanixImage, error) {
+func (d *NutanixDriver) UploadImage(imagePath string, sourceType string, imageType string, vm VmConfig, checksum string) (*nutanixImage, error) {
 	configCreds := client.Credentials{
 		URL:      fmt.Sprintf("%s:%d", d.ClusterConfig.Endpoint, d.ClusterConfig.Port),
 		Endpoint: d.ClusterConfig.Endpoint,
@@ -550,6 +550,11 @@ func (d *NutanixDriver) UploadImage(imagePath string, sourceType string, imageTy
 			return &nutanixImage{image: *image}, nil
 		}
 		req.Spec.Resources.SourceURI = &imagePath
+		if checksum != "" {
+			req.Spec.Resources.Checksum.ChecksumAlgorithm = StringPtr("SHA_256")
+			req.Spec.Resources.Checksum.ChecksumValue = StringPtr(checksum)
+		}
+
 	}
 	image, err := conn.V3.CreateImage(req)
 	if err != nil {
